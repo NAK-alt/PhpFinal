@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 36 20% 97%;
+    --foreground: 24 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 10% 10%;
+    --primary: 40 60% 40%;
+    --primary-foreground: 36 20% 97%;
+    --secondary: 36 15% 92%;
+    --secondary-foreground: 24 10% 20%;
+    --muted: 36 10% 94%;
+    --muted-foreground: 24 8% 46%;
+    --accent: 40 30% 88%;
+    --accent-foreground: 24 10% 15%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 36 15% 85%;
+    --input: 36 15% 85%;
+    --ring: 40 60% 40%;
+    --radius: 0.375rem;
+  }
+
+  .dark {
+    --background: 24 12% 7%;
+    --foreground: 36 20% 92%;
+    --card: 24 12% 10%;
+    --card-foreground: 36 20% 92%;
+    --popover: 24 12% 10%;
+    --popover-foreground: 36 20% 92%;
+    --primary: 40 55% 55%;
+    --primary-foreground: 24 12% 7%;
+    --secondary: 24 10% 16%;
+    --secondary-foreground: 36 15% 80%;
+    --muted: 24 10% 14%;
+    --muted-foreground: 36 12% 55%;
+    --accent: 24 12% 18%;
+    --accent-foreground: 36 20% 90%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 24 10% 18%;
+    --input: 24 10% 18%;
+    --ring: 40 55% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3 {
+    @apply font-serif tracking-wide;
+  }
+}
+
+@layer components {
+  .luxury-divider {
+    @apply flex items-center gap-4 my-8;
+  }
+  .luxury-divider::before,
+  .luxury-divider::after {
+    content: '';
+    @apply flex-1 border-t border-border;
+  }
+  .luxury-divider span {
+    @apply text-gold text-lg;
+  }
+
+  .gold-text {
+    @apply text-gold-DEFAULT;
+  }
+
+  .watch-card-hover {
+    @apply transition-all duration-500 hover:shadow-2xl hover:-translate-y-1;
+  }
+}
