@@ -84,3 +84,56 @@
     @apply transition-all duration-500 hover:shadow-2xl hover:-translate-y-1;
   }
 }
+
+/* Modal: force opaque background and remove blend/backdrop effects */
+.admin-modal-overlay {
+  background-color: rgba(0,0,0,0.65) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483646 !important;
+}
+
+.admin-modal-force,
+[role="dialog"].admin-modal-force {
+  background-color: hsl(var(--card)) !important;
+  opacity: 1 !important;
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
+
+.admin-modal-force * {
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+}
+
+/* Strongest possible isolation for modal root to avoid ancestor blending/backdrop effects */
+#modal-root, #modal-root * {
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#modal-root .admin-modal-overlay {
+  background-color: #000000 !important;
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483646 !important;
+}
+
+#modal-root .admin-modal-force,
+#modal-root [role="dialog"].admin-modal-force {
+  background-color: rgba(0,0,0,0.96) !important;
+  opacity: 1 !important;
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}

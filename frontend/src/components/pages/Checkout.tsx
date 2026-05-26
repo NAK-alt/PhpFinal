@@ -14,7 +14,6 @@ interface CheckoutForm {
   address_line1: string
   address_line2: string
   city: string
-  state: string
   postal_code: string
   country: string
 }
@@ -32,7 +31,6 @@ export default function Checkout() {
     address_line1: '',
     address_line2: '',
     city: '',
-    state: '',
     postal_code: '',
     country: 'United States',
   })
@@ -123,35 +121,31 @@ export default function Checkout() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="recipient_name">Full Name</Label>
-                  <Input id="recipient_name" value={form.recipient_name} onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))} required />
+                  <Input id="recipient_name" value={form.recipient_name} onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))} required className="h-12" placeholder="Jane Doe" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required />
+                  <Input id="phone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required className="h-12" placeholder="(555) 555-0123" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="country">Country</Label>
-                  <Input id="country" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} required />
+                  <Input id="country" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} required className="h-12" placeholder="United States" />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="address_line1">Address Line 1</Label>
-                  <Input id="address_line1" value={form.address_line1} onChange={e => setForm(f => ({ ...f, address_line1: e.target.value }))} required />
+                  <Input id="address_line1" value={form.address_line1} onChange={e => setForm(f => ({ ...f, address_line1: e.target.value }))} required className="h-12" placeholder="123 Main St" />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="address_line2">Address Line 2</Label>
-                  <Input id="address_line2" value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))} />
+                  <Input id="address_line2" value={form.address_line2} onChange={e => setForm(f => ({ ...f, address_line2: e.target.value }))} className="h-12" placeholder="Apt, suite, building (optional)" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} required />
+                  <Input id="city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} required className="h-12" placeholder="City" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="state">State</Label>
-                  <Input id="state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} required />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
                   <Label htmlFor="postal_code">Postal Code</Label>
-                  <Input id="postal_code" value={form.postal_code} onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))} required />
+                  <Input id="postal_code" value={form.postal_code} onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))} required className="h-12" placeholder="ZIP / Postal Code" />
                 </div>
               </div>
             </div>

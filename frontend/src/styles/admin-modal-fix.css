@@ -1,0 +1,28 @@
+:root {
+  /* fallback */
+}
+
+/* Strong override to ensure modals render opaque and on top */
+.admin-modal-overlay {
+  background-color: rgba(0,0,0,0.65) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483646 !important;
+}
+
+.admin-modal-force,
+[role="dialog"].admin-modal-force {
+  background-color: #fff !important;
+  opacity: 1 !important;
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 2147483647 !important;
+}
+
+/* Ensure child elements inside modal do not inherit blend modes */
+.admin-modal-force * {
+  -webkit-mix-blend-mode: normal !important;
+  mix-blend-mode: normal !important;
+}

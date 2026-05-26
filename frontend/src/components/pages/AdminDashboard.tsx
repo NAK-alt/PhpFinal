@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Package, Users, MessageSquare, Plus, Pencil, Trash2, X, Check, Clock3, ShoppingCart, RefreshCcw } from 'lucide-react'
+// moved modal overrides to global index.css
+import { createPortal } from 'react-dom'
+import { Package, Users, MessageSquare, Plus, Pencil, Trash2, X, Check, Clock3, ShoppingCart, RefreshCcw, BarChart3, TrendingUp } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -8,16 +10,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge'
 import { Separator } from '../ui/separator'
 import api from '../../lib/api'
+// Image import removed (not used) — next/image isn't available in this build
 import { useAuth } from '../../context/AuthContext'
 
-type Tab = 'overview' | 'orders' | 'products' | 'contacts' | 'customers'
+type Tab = 'overview' | 'orders' | 'customers' | 'products' | 'stock' | 'contacts'
 type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
 interface Product {
-  id: number; name: string; brand: string; price: string; category: string; stock: number; is_active: boolean; image: string; description: string
+  id: number; name: string; brand: string; price: string; category: string; stock: number; is_active: boolean; image: string; description: string; created_at?: string
 }
 interface ContactMsg {
   id: number; name: string; email: string; subject: string; message: string; is_read: boolean; created_at: string
+}
+
+interface StockProduct {
+  id: number
+  name: string
+  brand: string
+  stock: number
+  bought_quantity: number
+  created_at: string
+}
+
+interface BoughtProduct {
+  id: number
+  name: string
+  brand: string
+  stock: number
+  total_bought: number
+  price: number
 }
 
 interface AdminOrderItem {
@@ -52,10 +73,12 @@ interface RecentOrderStat {
 
 interface Stats {
   total_products: number
+  total_stock_units: number
   active_products: number
   low_stock_products: number
   total_users: number
   total_orders: number
+  total_sold_units: number
   pending_orders: number
   monthly_orders: number
   unread_messages: number
@@ -63,6 +86,8 @@ interface Stats {
   monthly_revenue: number
   average_order_value: number
   recent_orders: RecentOrderStat[]
+  recent_stock_products: StockProduct[]
+  top_bought_products: BoughtProduct[]
 }
 
 const EMPTY_PRODUCT = { name: '', brand: '', price: '', category: 'diving', stock: '10', image: '', description: '' }
@@ -71,6 +96,8 @@ export default function AdminDashboard() {
   const { user } = useAuth()
   const [tab, setTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats | null>(null)
+  const [filterMonth, setFilterMonth] = useState<number | null>(new Date().getMonth() + 1)
+  const [filterYear, setFilterYear] = useState<number | null>(new Date().getFullYear())
   const [products, setProducts] = useState<Product[]>([])
   const [contacts, setContacts] = useState<ContactMsg[]>([])
   const [orders, setOrders] = useState<AdminOrder[]>([])
@@ -99,7 +126,10 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const r = await api.get('/admin/stats')
+      const params: Record<string, number | undefined> = {}
+      if (filterMonth) params.month = filterMonth
+      if (filterYear) params.year = filterYear
+      const r = await api.get('/admin/stats', { params })
       setStats(r.data)
     } catch {}
   }
@@ -122,6 +152,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchStats()
   }, [])
+
+  useEffect(() => {
+    // refetch stats when month/year filter changes
+    fetchStats()
+  }, [filterMonth, filterYear])
 
   const fetchCustomers = async () => {
     setCustomersLoading(true)
@@ -165,6 +200,17 @@ export default function AdminDashboard() {
     } catch {
       setCustomerOrders([])
     }
+  }
+
+  const getModalRoot = () => {
+    if (typeof document === 'undefined') return null
+    let root = document.getElementById('modal-root')
+    if (!root) {
+      root = document.createElement('div')
+      root.id = 'modal-root'
+      document.body.appendChild(root)
+    }
+    return root
   }
 
   const openCreate = () => { setForm(EMPTY_PRODUCT); setEditId(null); setShowForm(true) }
@@ -222,11 +268,11 @@ export default function AdminDashboard() {
   const totalWithTax = (order: AdminOrder) => Number(order.total_amount || 0) + Number(order.tax_amount || 0)
 
   const statusClasses = (status: OrderStatus) => {
-    if (status === 'pending') return 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-    if (status === 'processing') return 'bg-sky-500/15 text-sky-400 border-sky-500/30'
-    if (status === 'shipped') return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30'
-    if (status === 'delivered') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-    return 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+    if (status === 'pending') return 'bg-amber-500/15 !text-foreground dark:!text-white font-semibold border-amber-500/30'
+    if (status === 'processing') return 'bg-sky-500/15 !text-foreground dark:!text-white font-semibold border-sky-500/30'
+    if (status === 'shipped') return 'bg-indigo-500/15 !text-foreground dark:!text-white font-semibold border-indigo-500/30'
+    if (status === 'delivered') return 'bg-emerald-500/15 !text-foreground dark:!text-white font-semibold border-emerald-500/30'
+    return 'bg-rose-500/15 !text-foreground dark:!text-white font-semibold border-rose-500/30'
   }
 
   const money = (value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -237,14 +283,39 @@ export default function AdminDashboard() {
   const pieRadius = 40
   const pieCircumference = 2 * Math.PI * pieRadius
   const pieFilled = (monthlyRevenueShare / 100) * pieCircumference
+  const stockProducts = stats?.recent_stock_products ?? []
+  const topBoughtProducts = stats?.top_bought_products ?? []
+  const lowStockProducts = [...products].filter(product => product.stock <= 5).sort((a, b) => a.stock - b.stock).slice(0, 6)
+  const stockChartMax = Math.max(...stockProducts.map(p => Math.max(p.stock, p.bought_quantity)), 1)
+  const stockChartWidth = Math.max(stockProducts.length * 112, 720)
+  const stockChartHeight = 320
+  const stockLinePoints = stockProducts
+    .map((product, index) => {
+      const x = 64 + index * 112
+      const y = 220 - (Math.max(product.stock, 0) / stockChartMax) * 150
+      return `${x},${y}`
+    })
+    .join(' ')
+  const stockAreaPath = stockProducts.length > 0
+    ? `M 64 220 ${stockProducts
+        .map((product, index) => {
+          const x = 64 + index * 112
+          const y = 220 - (Math.max(product.stock, 0) / stockChartMax) * 150
+          return `L ${x} ${y}`
+        })
+        .join(' ')} L ${64 + (stockProducts.length - 1) * 112} 220 Z`
+    : ''
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'orders', label: 'Orders' },
     { id: 'customers', label: 'Customers' },
     { id: 'products', label: 'Products' },
+    { id: 'stock', label: 'Stock' },
     { id: 'contacts', label: 'Messages' },
   ]
+
+    // removed modal ancestor logger after replacing modals with inline UI
 
   return (
     <div className="min-h-screen py-10">
@@ -463,6 +534,95 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Replaced modals with inline cards below for better UX */}
+
+            <div className="bg-card border border-border rounded-lg p-6 mb-10">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                    <h2 className="font-serif text-xl">Stock Movement</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground">A denser inventory view of current stock versus bought quantity for the newest products.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary" />Added stock</span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Bought</span>
+                  <div className="flex items-center gap-2 ml-2">
+                    <label className="text-[11px] text-muted-foreground mr-2">Filter</label>
+                    <select aria-label="Filter month" value={filterMonth ?? ''} onChange={e => setFilterMonth(e.target.value ? Number(e.target.value) : null)} className="rounded-md border border-border bg-background/95 px-2 py-1 text-sm text-foreground">
+                      <option value="">Month</option>
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                        <option key={m} value={m}>{new Date(0, m-1).toLocaleString(undefined, { month: 'short' })}</option>
+                      ))}
+                    </select>
+                    <select aria-label="Filter year" value={filterYear ?? ''} onChange={e => setFilterYear(e.target.value ? Number(e.target.value) : null)} className="rounded-md border border-border bg-background/95 px-2 py-1 text-sm text-foreground">
+                      <option value="">Year</option>
+                      {Array.from({ length: 6 }).map((_, i) => {
+                        const y = new Date().getFullYear() - i
+                        return <option key={y} value={y}>{y}</option>
+                      })}
+                    </select>
+                    <button onClick={() => { setFilterMonth(new Date().getMonth() + 1); setFilterYear(new Date().getFullYear()) }} className="ml-2 text-sm text-muted-foreground underline">Now</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,255,255,0.25))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] overflow-x-auto dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] text-foreground">
+                {stockProducts.length > 0 ? (
+                  <svg
+                    viewBox={`0 0 ${stockChartWidth} ${stockChartHeight}`}
+                    className="w-full h-[320px] min-w-[720px]"
+                    role="img"
+                    aria-label="Stock vs bought quantity chart"
+                  >
+                    <defs>
+                      <linearGradient id="stockFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.7" />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.08" />
+                      </linearGradient>
+                      <linearGradient id="boughtFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(142 71% 45%)" stopOpacity="0.8" />
+                        <stop offset="100%" stopColor="hsl(142 71% 45%)" stopOpacity="0.12" />
+                      </linearGradient>
+                    </defs>
+                    {[0, 1, 2, 3].map((step) => {
+                      const y = 80 + step * 40
+                      return <line key={step} x1="48" y1={y} x2={stockChartWidth - 48} y2={y} className="stroke-border/70" strokeDasharray="4 8" strokeWidth="1" />
+                    })}
+                    <line x1="48" y1="220" x2={stockChartWidth - 48} y2="220" className="stroke-border" strokeWidth="1.25" />
+                    {stockAreaPath && <path d={stockAreaPath} fill="url(#stockFill)" opacity="0.8" />}
+                    {stockLinePoints && <polyline points={stockLinePoints} fill="none" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+                    {stockProducts.map((product, index) => {
+                      const baseX = 64 + index * 112
+                      const stockHeight = Math.max((product.stock / stockChartMax) * 150, product.stock > 0 ? 10 : 0)
+                      const boughtHeight = Math.max((product.bought_quantity / stockChartMax) * 150, product.bought_quantity > 0 ? 10 : 0)
+                      const stockY = 220 - stockHeight
+                      const boughtY = 220 - boughtHeight
+                      const label = product.name.length > 14 ? `${product.name.slice(0, 14)}…` : product.name
+                      const stockX = baseX - 26
+                      const boughtX = baseX + 6
+
+                      return (
+                        <g key={product.id}>
+                          <rect x={baseX - 38} y="34" width="76" height="186" rx="18" fill="transparent" stroke="var(--border)" strokeWidth={1.25} className="opacity-95" />
+                          <rect x={stockX} y={stockY} width="22" height={stockHeight} rx="7" fill="url(#stockFill)" />
+                          <rect x={boughtX} y={boughtY} width="22" height={boughtHeight} rx="7" fill="url(#boughtFill)" />
+                          <circle cx={stockX + 11} cy={Math.max(stockY - 8, 50)} r="3.5" className="fill-primary" />
+                          <circle cx={boughtX + 11} cy={Math.max(boughtY - 8, 50)} r="3.5" className="fill-emerald-500" />
+                          <text x={baseX} y="56" textAnchor="middle" fill="currentColor" className="text-[10px] uppercase tracking-[0.3em] opacity-80">{product.created_at ? new Date(product.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</text>
+                          <text x={baseX} y="236" textAnchor="middle" fill="currentColor" className="text-[11px] font-medium">{label}</text>
+                          <text x={baseX} y="252" textAnchor="middle" fill="currentColor" className="text-[10px] opacity-80">Stock {product.stock} · Bought {product.bought_quantity}</text>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center py-8">No stock activity found yet.</div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="xl:col-span-2 bg-card border border-border rounded-lg p-6">
                 <h2 className="font-serif text-xl mb-4">Recent Orders</h2>
@@ -510,7 +670,7 @@ export default function AdminDashboard() {
                   <h3 className="text-sm tracking-widest uppercase text-muted-foreground mb-3">Monthly Revenue Pie</h3>
                   <div className="flex items-center gap-4 mb-5">
                     <svg viewBox="0 0 100 100" className="w-24 h-24 -rotate-90 shrink-0">
-                      <circle cx="50" cy="50" r={pieRadius} fill="none" className="stroke-muted" strokeWidth="12" />
+                      <circle cx="50" cy="50" r={pieRadius} fill="none" className="stroke-border/40" strokeWidth="12" />
                       <circle
                         cx="50"
                         cy="50"
@@ -532,6 +692,8 @@ export default function AdminDashboard() {
 
                   <h3 className="text-sm tracking-widest uppercase text-muted-foreground mb-3">Performance Snapshot</h3>
                   <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between"><span className="text-muted-foreground">Stock units</span><span className="font-medium">{stats?.total_stock_units ?? '—'}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-muted-foreground">Sold units</span><span className="font-medium">{stats?.total_sold_units ?? '—'}</span></div>
                     <div className="flex items-center justify-between"><span className="text-muted-foreground">Average order value</span><span className="font-medium">{stats ? money(stats.average_order_value) : '—'}</span></div>
                     <div className="flex items-center justify-between"><span className="text-muted-foreground">Monthly orders</span><span className="font-medium">{stats?.monthly_orders ?? '—'}</span></div>
                     <div className="flex items-center justify-between"><span className="text-muted-foreground">Active products</span><span className="font-medium">{stats?.active_products ?? '—'}</span></div>
@@ -555,7 +717,7 @@ export default function AdminDashboard() {
                   className="sm:w-72"
                 />
                 <Select value={orderStatusFilter} onValueChange={v => setOrderStatusFilter(v as 'all' | OrderStatus)}>
-                  <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
@@ -593,7 +755,7 @@ export default function AdminDashboard() {
                         onValueChange={v => updateOrderStatus(order.id, v as OrderStatus)}
                         disabled={updatingOrderId === order.id}
                       >
-                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="processing">Processing</SelectItem>
@@ -637,6 +799,131 @@ export default function AdminDashboard() {
                   Loading orders...
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Stock */}
+        {tab === 'stock' && (
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+              <div>
+                <h2 className="font-serif text-2xl font-light">Stock Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Track which products entered inventory and which ones have already been bought.</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" size="sm" onClick={fetchStats}><RefreshCcw className="h-4 w-4 mr-2" />Refresh</Button>
+                <Button size="sm" onClick={() => setTab('products')}><Plus className="h-4 w-4 mr-2" />Manage Products</Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+              <div className="bg-card border border-border rounded-lg p-5">
+                <p className="text-xs tracking-widest uppercase text-muted-foreground mb-2">Current Stock Units</p>
+                <div className="font-serif text-3xl">{stats?.total_stock_units ?? '—'}</div>
+                <p className="text-sm text-muted-foreground mt-2">Total units currently listed in inventory.</p>
+              </div>
+              <div className="bg-card border border-border rounded-lg p-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs tracking-widest uppercase text-muted-foreground mb-2">Units Bought</p>
+                    <div className="font-serif text-3xl">{stats?.total_sold_units ?? '—'}</div>
+                    <p className="text-sm text-muted-foreground mt-2">Products driving sales</p>
+                  </div>
+                  <TrendingUp className="h-5 w-5 text-emerald-500 mt-1" />
+                </div>
+                <div className="space-y-2 max-h-44 overflow-y-auto">
+                  {topBoughtProducts.length > 0 ? (
+                    (() => {
+                      const max = Math.max(...topBoughtProducts.map(p => p.total_bought), 1)
+                      return topBoughtProducts.slice(0, 6).map(p => (
+                        <div key={p.id} className="flex items-center gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{p.brand}</p>
+                          </div>
+                          <div className="flex-1">
+                            <div className="h-3 bg-muted/40 rounded-full overflow-hidden">
+                              <svg className="w-full h-3 block">
+                                <rect x="0" y="0" width={`${Math.round((p.total_bought / max) * 100)}%`} height="100%" rx="6" fill={`hsl(var(--primary))`} />
+                              </svg>
+                            </div>
+                          </div>
+                          <div className="w-16 text-right text-xs text-muted-foreground">{p.total_bought}</div>
+                        </div>
+                      ))
+                    })()
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No bought-product data available yet.</p>
+                  )}
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-lg p-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs tracking-widest uppercase text-muted-foreground mb-2">Low Stock Items</p>
+                    <div className="font-serif text-3xl">{stats?.low_stock_products ?? '—'}</div>
+                    <p className="text-sm text-muted-foreground mt-2">Inspect the lowest inventory items</p>
+                  </div>
+                  <Package className="h-5 w-5 text-amber-500 mt-1" />
+                </div>
+                <div className="space-y-2 max-h-44 overflow-y-auto">
+                  {lowStockProducts.length > 0 ? (
+                    lowStockProducts.map(p => (
+                      <div key={p.id} className="flex items-center justify-between gap-3 px-2 py-1 rounded-md border border-border/60">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{p.brand}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[11px] uppercase border-amber-500/30 text-amber-500">{p.stock} left</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No low stock items right now.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-card border border-border rounded-lg p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="font-serif text-xl">Recently Added Stock</h3>
+                  <Badge variant="outline" className="text-[10px] uppercase border">Newest 6</Badge>
+                </div>
+                <div className="space-y-3">
+                  {stockProducts.map(product => (
+                    <div key={product.id} className="border border-border rounded-md px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{product.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{product.brand} · Added {new Date(product.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 text-sm">
+                        <span className="text-muted-foreground">Bought</span>
+                        <span className="font-medium">{product.bought_quantity}</span>
+                        <span className="text-muted-foreground">Stock</span>
+                        <span className="font-medium">{product.stock}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {stockProducts.length === 0 && <p className="text-sm text-muted-foreground">No recent stock additions found.</p>}
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="font-serif text-xl">Most Bought Products</h3>
+                  <Badge variant="outline" className="text-[10px] uppercase border">Top sellers</Badge>
+                </div>
+                <div className="space-y-3">
+                  {/* Pie chart for top bought products */}
+                  {topBoughtProducts.filter(p => p.total_bought > 0).length > 0 && (
+                    <MostBoughtPie products={topBoughtProducts.filter(p => p.total_bought > 0)} />
+                  )}
+                  {/* Product overview removed per request; donut only. */}
+                  {topBoughtProducts.length === 0 && <p className="text-sm text-muted-foreground">No purchased products found yet.</p>}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -748,7 +1035,7 @@ export default function AdminDashboard() {
                       <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {['diving','dress','sport','luxury'].map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                          {['diving','dress','sport','luxury'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -852,6 +1139,59 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+            {/* Inline overview cards replaced the old modals for Units Bought and Low Stock */}
+
+      </div>
+    </div>
+  )
+}
+
+
+function MostBoughtPie({ products }: { products: { id: number; name: string; brand: string; stock: number; total_bought: number; image?: string }[] }) {
+  // Replace donut with a clean horizontal bar chart centered in the card.
+  const colors = ['#BFA86A', '#C9B99A', '#9B7A4C', '#6B7280', '#A8A29E', '#D6C6A8']
+  const top = [...products].sort((a, b) => (b.total_bought || 0) - (a.total_bought || 0)).slice(0, 6)
+  const total = top.reduce((s, p) => s + (p.total_bought || 0), 0) || 1
+  const [hoveredId, setHoveredId] = useState<number | null>(null)
+
+  return (
+    <div className="py-6 flex flex-col items-center">
+      <div className="w-full max-w-xl">
+        {top.map((p, i) => {
+          const pct = Math.round(((p.total_bought || 0) / total) * 100)
+          const color = colors[i % colors.length]
+          return (
+            <div
+              key={p.id}
+              className="mb-4 relative pr-56"
+              onMouseEnter={() => setHoveredId(p.id)}
+              onMouseLeave={() => setHoveredId(null)}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
+                <div className="text-sm text-muted-foreground">{p.total_bought}</div>
+              </div>
+              <div className="bg-muted/40 rounded-full h-3 overflow-hidden">
+                <svg className="w-full h-3 block">
+                  <rect x="0" y="0" width={`${Math.max(pct, 2)}%`} height="100%" rx="6" fill={color} />
+                </svg>
+              </div>
+
+              <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-48 p-3 rounded-md border border-border bg-background shadow-lg transition-opacity duration-150 ${hoveredId === p.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-muted rounded-md overflow-hidden flex-shrink-0">
+                    {p.image ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-muted" />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">Stock: <span className="font-medium">{p.stock}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        {top.length === 0 && <p className="text-sm text-muted-foreground">No purchased products found yet.</p>}
       </div>
     </div>
   )

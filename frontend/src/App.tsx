@@ -29,9 +29,10 @@ function AdminRoute({ children }: { children: ReactNode }) {
 }
 
 function GuestRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, isAdmin } = useAuth()
   if (loading) return null
-  return user ? <Navigate to="/" replace /> : <>{children}</>
+  if (user) return <Navigate to={isAdmin() ? '/admin' : '/'} replace />
+  return <>{children}</>
 }
 
 export default function App() {
